@@ -47,7 +47,7 @@ class Snake {
     bool isSelfCollision() const;
     bool isReachable(Point location) const;
     void moveMirror();
-    bool grow(Food food);
+    bool isEaten(Food food);
 
     void turnLeft();
     void turnRight();
@@ -199,9 +199,9 @@ void Snake::moveMirror() {
   headPosition = mirrorSegment(headPosition);
 }
 
-bool Snake::grow(Food food) {
+bool Snake::isEaten(Food food) {
   if (predictHeadMove() == food) {
-    body.push_front({food[0], food[1]});
+    body.push_front(food);
     return true;
   }
   return false;
@@ -307,7 +307,7 @@ int main(int argc, char const* argv[]) {
       if (quitGame) break;
 
       if (!snake.isSelfCollision()) {
-        if (!snake.grow(food)) {
+        if (!snake.isEaten(food)) {
           auto tail = snake.getTailPosition();
           mvaddch(tail[0], tail[1], static_cast<char>(Graphics::Blank));
           snake.moveMirror();
