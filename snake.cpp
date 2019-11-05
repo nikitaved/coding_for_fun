@@ -24,16 +24,19 @@ class Snake {
   private:
     Body body;
     Direction direction;
+    ScreenSize screenSize;
 
     Segment& getHeadPosition();
     Segment predictHeadMove() const;
     void turn(Direction where);
-    static Segment mirrorSegment(Segment segment, ScreenSize& screenSize);
-    static int convert2D2Flat(Point location, ScreenSize& screenSize);
-    bool isReachable(Point start, Point end, ScreenSize& screenSize) const;
+    Segment mirrorSegment(Segment segment) const;
+    int convert2D2Flat(Point location) const;
+    bool isReachable(Point start, Point end) const;
+    void move();
 
   public:
-    Snake(Body initBody, Direction initDirection = Direction::Left);
+    Snake(Body initBody, ScreenSize screenSize,
+        Direction initDirection = Direction::Left);
 
     const Segment& getHeadPosition() const;
     const Segment& getTailPosition() const;
@@ -42,9 +45,8 @@ class Snake {
 
     bool isInsideBody(Point point) const;
     bool isSelfCollision() const;
-    bool isReachable(Point location, ScreenSize& screenSize) const;
-    void move();
-    void moveMirror(ScreenSize& screenSize);
+    bool isReachable(Point location) const;
+    void moveMirror();
     bool grow(Food food);
 
     void turnLeft();
@@ -93,9 +95,10 @@ void Snake::turn(Direction where) {
   }
 }
 
-Snake::Snake(Snake::Body initBody, 
+Snake::Snake(Snake::Body initBody,
+    ScreenSize initScreenSize,
     Snake::Direction initDirection)
-  : body{initBody}, direction{initDirection}
+  : body{initBody}, screenSize{initScreenSize}, direction{initDirection}
 {}
 
 Snake::Segment& Snake::getHeadPosition() {
@@ -131,17 +134,17 @@ bool Snake::isSelfCollision() const {
   return isInsideBody(newHead);
 }
 
-bool Snake::isReachable(Point start, Point end, ScreenSize& screenSize) const {
+bool Snake::isReachable(Point start, Point end) const {
   BitMap isSeen(screenSize[0] * screenSize[1], false);
   for (auto& segment : body) {
     if (segment == end)
       return false;
-    isSeen[convert2D2Flat(segment, screenSize)] = true;
+    isSeen[convert2D2Flat(segment)] = true;
   }
 
   std::deque<Point> bfs;
   bfs.push_front(start);
-  isSeen[convert2D2Flat(start, screenSize)] = true;
+  isSeen[convert2D2Flat(start)] = true;
   while (bfs.size()) {
     auto currLocation = bfs.front();
     bfs.pop_front();
@@ -155,10 +158,10 @@ bool Snake::isReachable(Point start, Point end, ScreenSize& screenSize) const {
         if (std::abs(dy) == std::abs(dx))
           continue;
         Point neighbour{currLocation[0] + dy, currLocation[1] + dx};
-        neighbour = Snake::mirrorSegment(neighbour, screenSize);
-        if (!isSeen[convert2D2Flat(neighbour, screenSize)]) {
+        neighbour = mirrorSegment(neighbour);
+        if (!isSeen[convert2D2Flat(neighbour)]) {
           bfs.push_back(neighbour);
-          isSeen[convert2D2Flat(neighbour, screenSize)] = true;
+          isSeen[convert2D2Flat(neighbour)] = true;
         }
       }
     }
@@ -167,8 +170,8 @@ bool Snake::isReachable(Point start, Point end, ScreenSize& screenSize) const {
   return false;
 }
 
-bool Snake::isReachable(Point location, ScreenSize& screenSize) const {
-  return isReachable(predictHeadMove(), location, screenSize);
+bool Snake::isReachable(Point location) const {
+  return isReachable(predictHeadMove(), location);
 }
 void Snake::move() {
   body.pop_back(); // remove tail
@@ -176,7 +179,7 @@ void Snake::move() {
   body.push_front(newHead);
 }
 
-Snake::Segment Snake::mirrorSegment(Segment segment, ScreenSize& screenSize) {
+Snake::Segment Snake::mirrorSegment(Segment segment) const {
   for (int coord = 0; coord < 2; ++coord) {
     if (segment[coord] < 0)
       segment[coord] = screenSize[coord] - 1;
@@ -186,14 +189,14 @@ Snake::Segment Snake::mirrorSegment(Segment segment, ScreenSize& screenSize) {
   return segment;
 }
 
-int Snake::convert2D2Flat(Point location, ScreenSize& screenSize) {
+int Snake::convert2D2Flat(Point location) const {
   return screenSize[1] * location[0] + location[1];
 }
 
-void Snake::moveMirror(ScreenSize& screenSize) {
+void Snake::moveMirror() {
   move();
   Segment& headPosition = getHeadPosition();
-  headPosition = Snake::mirrorSegment(headPosition, screenSize);
+  headPosition = mirrorSegment(headPosition);
 }
 
 bool Snake::grow(Food food) {
@@ -273,7 +276,7 @@ int main(int argc, char const* argv[]) {
       snakeBody.push_back({center[0], center[1] + seg});
     }
     Snake::Direction direction = Snake::Direction::Left;
-    Snake snake{snakeBody, direction};
+    Snake snake{snakeBody, screenSize, direction};
 
     Food food{center[0], center[1] - 10};
     int score = 0;
@@ -307,11 +310,11 @@ int main(int argc, char const* argv[]) {
         if (!snake.grow(food)) {
           auto tail = snake.getTailPosition();
           mvaddch(tail[0], tail[1], static_cast<char>(Graphics::Blank));
-          snake.moveMirror(screenSize);
+          snake.moveMirror();
         }
         else {
           ++score;
-          while (!snake.isReachable(food, screenSize))
+          while (!snake.isReachable(food))
             food = {rand() % screenSize[0], rand() % screenSize[1]};
         }
       }
@@ -327,7 +330,7 @@ int main(int argc, char const* argv[]) {
     nodelay(stdscr, FALSE); // make input blocking
     mvaddstr(maxLines - 1, 0,
       "Want to play once more? "
-      "Press 'y' to start a new game, or 'any key' to quit.");
+      "Press 'y' to start a new game, or 'n' to quit.");
     refresh();
     bool receivedYesOrNo = false;
     while (!receivedYesOrNo) {
